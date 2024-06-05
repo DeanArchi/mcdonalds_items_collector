@@ -1,11 +1,12 @@
 import json
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 import time
-from flask import Flask, jsonify
+from flask import Flask
 import requests
 from bs4 import BeautifulSoup
+from transliterate import translit
+import re
 
 app = Flask(__name__)
 
@@ -44,23 +45,28 @@ def get_all_products():
     return data
 
 
-@app.route('/products/<int:product_name>')
+@app.route('/products/<string:product_name>')
 def get_product(product_name):
     url = 'https://www.mcdonalds.com/ua/uk-ua/eat/fullmenu.html'
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
     item_description = []
+    product_id = 0
 
-    try:
-        item = soup.find('li', {'data-product-id': f'{product_name}'})
-        if item is None:
-            raise ValueError(f"Item with id '{product_name} not found'")
-    except ValueError as e:
-        print(e)
+    menu_elements = soup.find_all('li', class_='cmp-category__item')
+    for item in menu_elements:
+        item_name = item.find('div', class_='cmp-category__item-name').text.strip()
+        item_name_translit = translit(item_name, 'uk', reversed=True)
+        formatted_item_name_translit = re.sub(r'\W+', '-', item_name_translit.lower()).rstrip('-')
+        print(formatted_item_name_translit)
+
+        if formatted_item_name_translit == product_name:
+            product_id = item.get('data-product-id')
+            break
 
     with webdriver.Chrome() as driver:
         wait = WebDriverWait(driver, 10)
-        url = f'https://www.mcdonalds.com/ua/uk-ua/product/{product_name}.html'
+        url = f'https://www.mcdonalds.com/ua/uk-ua/product/{product_id}.html'
         driver.get(url)
         time.sleep(10)
         page_source = driver.page_source
